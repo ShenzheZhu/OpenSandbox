@@ -1,0 +1,57 @@
+services:
+  macos-mcp:
+    image: decodingtrustagent/macos
+    environment:
+      VERSION: '14'
+      PASS: ${MACOS_PASSWORD:?set MACOS_PASSWORD}
+      USER: docker
+      DISK_FMT: qcow2
+      CPU_MODEL: ${CPU_MODEL:-host}
+      CPU_FLAGS: ${CPU_FLAGS:--invtsc}
+      ARGUMENTS: ${ARGUMENTS-}
+      MACOS_HOST: 172.30.0.2
+      MACOS_PORT: '5900'
+      MACOS_PASSWORD: ${MACOS_PASSWORD:?set MACOS_PASSWORD}
+      MACOS_USERNAME: docker
+      MACOS_SSH_HOST: 172.30.0.2
+      MACOS_SSH_PORT: '22'
+      MACOS_SSH_USER: docker
+      MACOS_SSH_PASSWORD: ${MACOS_SSH_PASSWORD:?set MACOS_SSH_PASSWORD}
+    devices:
+    - /dev/kvm
+    - /dev/net/tun
+    cap_add:
+    - NET_ADMIN
+    ports:
+    - ${WEB_MANAGEMENT_PORT:-8006}:8006
+    - ${MCP_SERVICE_PORT:-8005}:8005
+    volumes:
+    - ${MACOS_DATA_DIR:-./macos}:/base:ro
+    - ./entry.sh:/run/entry.sh:ro
+    - ./dnat_setup.sh:/run/dnat_setup.sh:ro
+    restart: always
+    stop_grace_period: 2m
+  mcp-healthcheck:
+    image: curlimages/curl:latest
+    depends_on:
+    - macos-mcp
+    command:
+    - sleep
+    - infinity
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -sf
+      - -X
+      - POST
+      - http://macos-mcp:8005/shell
+      - -H
+      - 'Content-Type: application/json'
+      - -d
+      - '{"command":"true"}'
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 60s
+      start_interval: 2s

@@ -1,0 +1,22 @@
+version: "3.8"
+
+services:
+  bigquery-emulator:
+    image: ghcr.io/goccy/bigquery-emulator:latest
+    security_opt:
+      - seccomp=unconfined
+    ports:
+      - "${BIGQUERY_API_PORT:-9050}:9050"
+      - "${BIGQUERY_GRPC_PORT:-9060}:9060"
+    command:
+      - "--project=${BIGQUERY_PROJECT_ID:-test-project}"
+      - "--port=${BIGQUERY_API_PORT:-9050}"
+      - "--grpc-port=${BIGQUERY_GRPC_PORT:-9060}"
+      - "--database=/var/lib/bigquery/emulator.db"
+    volumes:
+      - bigquery-data:/var/lib/bigquery
+    restart: unless-stopped
+
+volumes:
+  bigquery-data:
+    driver: local

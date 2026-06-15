@@ -1,0 +1,21 @@
+[project]
+name = "opensandbox-runtime"
+version = "0.1.0"
+description = "Environment-only runtime extracted from DecodingTrust-Agent sandbox assets."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+  "PyYAML>=6.0.1",
+]
+
+[project.scripts]
+opensandbox = "opensandbox.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["opensandbox*", "dt_arena*"]
+
