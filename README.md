@@ -28,6 +28,13 @@ opensandbox stop gmail --volumes
 
 Docker images are still pulled from the upstream `decodingtrustagent/*` namespace unless a third-party image is listed in the compose file.
 
+Most upstream `decodingtrustagent/*` images are currently published as `linux/amd64` images. On Apple Silicon or other arm64 hosts, use Docker Desktop's emulation path explicitly:
+
+```bash
+opensandbox start gmail --platform linux/amd64
+opensandbox pull gmail paypal calendar --platform linux/amd64
+```
+
 ## Included Environments
 
 The current import includes complete public compose assets for:
@@ -48,6 +55,8 @@ opensandbox start bigquery --offline-network
 ```
 
 This adds a Docker internal network override. If a compose file uses `network_mode: host`, the CLI refuses `--offline-network` because Docker cannot enforce per-container egress isolation in that mode. Run those inside a no-egress VM or convert the compose file to bridge networking first.
+
+On Docker Desktop, Docker internal networks can also make published host ports unreachable. Use `--offline-network` when the agent/runtime is also inside Docker, or enforce no-egress at the VM/firewall layer when host-side MCP processes or browser smoke tests need to reach published ports.
 
 By default, the runtime scrubs common provider credentials such as `OPENAI_*`, `ANTHROPIC_*`, `REPLICATE_*`, Azure OpenAI, AWS, and Google application credentials from Docker/MCP subprocesses. Pass `--allow-host-env` only when you intentionally want host secrets inherited.
 

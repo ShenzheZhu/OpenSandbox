@@ -86,6 +86,10 @@ def remove_state(project: str) -> None:
     path = state_path(project)
     if path.exists():
         path.unlink()
+    for suffix in (".offline-network.yml", ".platform.yml"):
+        sidecar = STATE_DIR / f"{project}{suffix}"
+        if sidecar.exists():
+            sidecar.unlink()
 
 
 def is_blocked_env(name: str) -> bool:
@@ -182,13 +186,33 @@ def has_host_network(compose_file: Path) -> bool:
 
 
 def offline_override(project: str) -> Path:
+    ensure_state_dir()
     path = STATE_DIR / f"{project}.offline-network.yml"
     path.write_text("networks:\n  default:\n    internal: true\n", encoding="utf-8")
     return path
 
 
-def compose_command(project: str, compose_file: Path, offline_network: bool) -> list[str]:
+PLATFORM_RE = re.compile(r"^[A-Za-z0-9_.:/-]+$")
+
+
+def platform_override(project: str, compose_file: Path, platform: str) -> Path:
+    ensure_state_dir()
+    if not PLATFORM_RE.fullmatch(platform):
+        raise ValueError(f"Invalid Docker platform: {platform!r}")
+    data = yaml.safe_load(compose_file.read_text(encoding="utf-8")) or {}
+    services = data.get("services") or {}
+    if not isinstance(services, dict) or not services:
+        raise RuntimeError(f"No services found in {compose_file}")
+    path = STATE_DIR / f"{project}.platform.yml"
+    override = {"services": {name: {"platform": platform} for name in services}}
+    path.write_text(yaml.safe_dump(override, sort_keys=True), encoding="utf-8")
+    return path
+
+
+def compose_command(project: str, compose_file: Path, offline_network: bool, platform: str | None = None) -> list[str]:
     cmd = ["docker", "compose", "-p", project, "-f", str(compose_file)]
+    if platform:
+        cmd.extend(["-f", str(platform_override(project, compose_file, platform))])
     if offline_network:
         cmd.extend(["-f", str(offline_override(project))])
     return cmd
@@ -200,6 +224,7 @@ def start_environment(
     fixed_ports: bool = False,
     offline_network: bool = False,
     allow_host_env: bool = False,
+    platform: str | None = None,
 ) -> dict[str, Any]:
     ensure_state_dir()
     cfg = get_environment(env_name)
@@ -213,7 +238,7 @@ def start_environment(
     ports = allocate_ports(cfg, fixed=fixed_ports)
     required = compose_required_env(compose_file, project)
     env = subprocess_env({**required, **ports}, allow_host_env=allow_host_env)
-    cmd = compose_command(project, compose_file, offline_network) + ["up", "-d", "--remove-orphans"]
+    cmd = compose_command(project, compose_file, offline_network, platform) + ["up", "-d", "--remove-orphans"]
     run(cmd, cwd=compose_file.parent, env=env)
     state = {
         "environment": env_name,
@@ -221,6 +246,7 @@ def start_environment(
         "compose_file": str(compose_file.relative_to(REPO_ROOT)),
         "ports": ports,
         "offline_network": offline_network,
+        "platform": platform,
         "started_at": int(time.time()),
     }
     save_state(project, state)
@@ -234,7 +260,12 @@ def stop_environment(env_name: str, prefix: str = "opensandbox", volumes: bool =
     compose_file = compose_path(cfg)
     required = compose_required_env(compose_file, project)
     env = subprocess_env({**required, **((state or {}).get("ports", {}))})
-    cmd = compose_command(project, compose_file, bool((state or {}).get("offline_network"))) + ["down", "--remove-orphans"]
+    cmd = compose_command(
+        project,
+        compose_file,
+        bool((state or {}).get("offline_network")),
+        (state or {}).get("platform"),
+    ) + ["down", "--remove-orphans"]
     if volumes:
         cmd.append("--volumes")
     run(cmd, cwd=compose_file.parent, env=env, check=False)
@@ -303,14 +334,15 @@ def list_images(env_names: Iterable[str]) -> list[str]:
     return sorted(set(images))
 
 
-def pull_images(env_names: Iterable[str]) -> None:
+def pull_images(env_names: Iterable[str], platform: str | None = None) -> None:
     for env_name in env_names:
         cfg = get_environment(env_name)
         compose_file = compose_path(cfg)
+        project = project_name("opensandbox", env_name)
         run(
-            ["docker", "compose", "-f", str(compose_file), "pull"],
+            compose_command(project, compose_file, offline_network=False, platform=platform) + ["pull"],
             cwd=compose_file.parent,
-            env=subprocess_env(compose_required_env(compose_file, project_name("opensandbox", env_name))),
+            env=subprocess_env(compose_required_env(compose_file, project)),
         )
 
 

@@ -57,6 +57,7 @@ def cmd_start(args: argparse.Namespace) -> int:
             fixed_ports=args.fixed_ports,
             offline_network=args.offline_network,
             allow_host_env=args.allow_host_env,
+            platform=args.platform,
         )
         used.append(state)
     print(json.dumps(used, indent=2, sort_keys=True))
@@ -82,7 +83,7 @@ def cmd_images(args: argparse.Namespace) -> int:
 
 
 def cmd_pull(args: argparse.Namespace) -> int:
-    pull_images(args.environments)
+    pull_images(args.environments, platform=args.platform)
     return 0
 
 
@@ -113,6 +114,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--fixed-ports", action="store_true", help="Use configured default ports exactly")
     p.add_argument("--offline-network", action="store_true", help="Use a Docker internal network when compose supports it")
     p.add_argument("--allow-host-env", action="store_true", help="Pass host environment variables through to Docker")
+    p.add_argument("--platform", help="Docker platform override, for example linux/amd64 on Apple Silicon")
     p.set_defaults(func=cmd_start)
 
     p = sub.add_parser("stop", help="Stop one or more environments")
@@ -130,6 +132,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("pull", help="Pull Docker images for environments")
     p.add_argument("environments", nargs="+")
+    p.add_argument("--platform", help="Docker platform override, for example linux/amd64 on Apple Silicon")
     p.set_defaults(func=cmd_pull)
 
     p = sub.add_parser("export-images", help="Save environment Docker images to a tar archive")
